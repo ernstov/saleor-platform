@@ -1,0 +1,315 @@
+namespace: saleor-platform
+
+api:
+  defines: runnable
+  inherits: hasura/hasura
+  metadata:
+    name: api
+    description: Core GraphQL API for Saleor platform.
+    icon: https://hasura.io/brand-assets/hasura-logo-primary-dark.svg
+  variables:
+    db:
+      type: string
+      value: '`postgres://monk:monk@${db_host}:5432/monk`'
+      description: ''
+    db_hasura:
+      type: string
+      value: '`postgres://monk:monk@${db_hasura_host}:5432/monk`'
+      description: ''
+    db_hasura_host:
+      type: string
+      value: connection-hostname("database") split(".dns.podman") join("")
+      description: ''
+    db_host:
+      type: string
+      value: connection-hostname("database") split(".dns.podman") join("")
+      description: ''
+    hasura_admin_secret:
+      type: string
+      value: monk
+      description: ''
+    hasura_graphql_cnsl:
+      type: string
+      value: 'true'
+      description: ''
+    hasura_graphql_dev:
+      type: string
+      value: 'true'
+      description: ''
+    hasura_graphql_log_types:
+      type: string
+      value: startup, http-log, webhook-log, websocket-log, query-log
+      description: ''
+    volume_local:
+      type: string
+      value: '`${monk-volume-path}/growthbook`'
+      description: ''
+
+dashboard:
+  defines: runnable
+  inherits: monitoring/grafana
+  metadata:
+    name: dashboard
+    description: Dashboard for Saleor platform.
+    icon: https://grafana.com/static/assets/internal/grafana_logo-web-white-text.svg
+  variables:
+    admin-password:
+      type: string
+      value: admin
+      description: ''
+    admin-user:
+      type: string
+      value: admin
+      description: ''
+    anonymous:
+      type: string
+      value: 'true'
+      description: ''
+    anonymous_role:
+      type: string
+      value: Viewer
+      description: ''
+    install_plugins:
+      type: string
+      value: grafana-clock-panel,grafana-simple-json-datasource
+      description: ''
+    prometheusHost:
+      type: string
+      value: connection-hostname("prometheus")
+      description: ''
+
+redis:
+  defines: runnable
+  inherits: redis/redis
+  metadata:
+    name: redis
+    description: Redis cache for Saleor platform.
+    icon: >-
+      https://cdn.icon-icons.com/icons2/2415/PNG/512/redis_original_wordmark_logo_icon_146369.png
+  variables:
+    redis_disable_commands:
+      type: string
+      value: FLUSHDB,FLUSHALL,CONFIG
+      description: ''
+    redis_empty_password:
+      type: string
+      value: 'yes'
+      description: ''
+    redis_instance_name:
+      type: string
+      value: master
+      description: ''
+    redis_io_thread:
+      type: string
+      value: '1'
+      description: ''
+    redis_io_threads_do_reads:
+      type: string
+      value: 'yes'
+      description: ''
+    redis_port:
+      type: int
+      value: '6379'
+      description: ''
+
+db:
+  defines: runnable
+  metadata:
+    name: db
+    description: PostgreSQL database for Saleor platform.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    db:
+      image: library/postgres:13-alpine
+      build: .
+  services:
+    postgres-default:
+      description: Default PostgreSQL port for database connections.
+      container: db
+      port: 5432
+      host-port: 5432
+      publish: true
+      protocol: tcp
+  connections:
+    database-to-api:
+      target: saleor-platform/api
+      service: hasura-svc
+      optional: true
+      description: PostgreSQL database connection to the core GraphQL API service.
+  variables:
+    postgres-user:
+      env: POSTGRES_USER
+      type: string
+      value: saleor
+      description: Username for the PostgreSQL database.
+    postgres-password:
+      env: POSTGRES_PASSWORD
+      type: string
+      value: saleor
+      description: Password for the PostgreSQL database.
+    postgres-db:
+      env: POSTGRES_DB
+      type: string
+      value: saleor
+      description: Database name for the PostgreSQL instance.
+
+worker:
+  defines: runnable
+  metadata:
+    name: worker
+    description: Background worker for Saleor platform.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    worker:
+      image: ghcr.io/saleor/saleor:3.18
+      build: .
+  services: {}
+  connections:
+    redis-connection:
+      target: saleor-platform/redis
+      service: redis-svc
+      optional: true
+      description: Connection to Redis service for caching and task queuing.
+    mailpit-connection:
+      target: saleor-platform/mailpit
+      service: smtp-port
+      optional: true
+      description: Connection to Mailpit service for testing email sending.
+  variables:
+    celery-broker-url:
+      env: CELERY_BROKER_URL
+      type: string
+      value: redis://redis:6379/0
+      description: URL of the broker for Celery.
+    redis-url:
+      env: REDIS_URL
+      type: string
+      value: <- connection-port("redis-connection")
+      description: URL for the Redis service.
+    default-channel-slug:
+      env: DEFAULT_CHANNEL_SLUG
+      type: string
+      value: default-channel
+      description: Default channel slug for Saleor.
+    http-ip-filter-allow-loopback-ips:
+      env: HTTP_IP_FILTER_ALLOW_LOOPBACK_IPS
+      type: bool
+      value: 'True'
+      description: Allow loopback IPs for HTTP IP filtering.
+    http-ip-filter-enabled:
+      env: HTTP_IP_FILTER_ENABLED
+      type: bool
+      value: 'True'
+      description: Enable HTTP IP filtering.
+
+jaeger:
+  defines: runnable
+  metadata:
+    name: jaeger
+    description: Jaeger service for tracing Saleor platform operations.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    jaeger:
+      image: jaegertracing/all-in-one
+      build: .
+  services:
+    jaeger-zipkin:
+      description: Port for Zipkin compatible endpoint
+      container: jaeger
+      port: 9411
+      host-port: 9411
+      publish: true
+      protocol: tcp
+    jaeger-collector:
+      description: Port for Jaeger collector service
+      container: jaeger
+      port: 14268
+      host-port: 14268
+      publish: true
+      protocol: tcp
+    jaeger-query:
+      description: Port for Jaeger query service UI
+      container: jaeger
+      port: 16686
+      host-port: 16686
+      publish: true
+      protocol: tcp
+    jaeger-config:
+      description: Port for Jaeger configuration
+      container: jaeger
+      port: 5778
+      host-port: 5778
+      publish: true
+      protocol: tcp
+    jaeger-agent-compact:
+      description: Port for Jaeger agent compact protocol
+      container: jaeger
+      port: 6831
+      host-port: 6831
+      publish: true
+      protocol: tcp
+    jaeger-agent-binary:
+      description: Port for Jaeger agent binary protocol
+      container: jaeger
+      port: 6832
+      host-port: 6832
+      publish: true
+      protocol: tcp
+    jaeger-agent-zipkin:
+      description: Port for Jaeger agent Zipkin thrift protocol
+      container: jaeger
+      port: 5775
+      host-port: 5775
+      publish: true
+      protocol: tcp
+  connections:
+    jaeger-to-api:
+      target: saleor-platform/api
+      service: hasura-svc
+      optional: true
+      description: Jaeger service connection to the API service for tracing requests
+  variables: {}
+
+mailpit:
+  defines: runnable
+  metadata:
+    name: mailpit
+    description: Mailpit service for testing email sending in Saleor platform.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    mailpit:
+      image: axllent/mailpit
+      build: .
+  services:
+    smtp-port:
+      description: SMTP server port for email sending
+      container: mailpit
+      port: 1025
+      host-port: 1025
+      publish: false
+      protocol: tcp
+    web-ui-port:
+      description: Web UI port to access Mailpit interface
+      container: mailpit
+      port: 8025
+      host-port: 8025
+      publish: true
+      protocol: tcp
+  connections:
+    smtp-server:
+      target: saleor-platform/api
+      service: hasura-svc
+      optional: true
+      description: SMTP server connection from Mailpit to API for email sending
+  variables: {}
+
+stack:
+  defines: group
+  members:
+    - saleor-platform/api
+    - saleor-platform/dashboard
+    - saleor-platform/redis
+    - saleor-platform/db
+    - saleor-platform/worker
+    - saleor-platform/jaeger
+    - saleor-platform/mailpit
