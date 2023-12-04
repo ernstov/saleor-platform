@@ -1,0 +1,7 @@
+FROM redis:6.0-alpine
+
+# Expose the default Redis port
+EXPOSE 6379
+
+# Command to start the Redis server
+CMD ["redis-server"]

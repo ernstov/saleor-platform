@@ -1,0 +1,90 @@
+namespace: saleor-platform
+
+db:
+  defines: runnable
+  metadata:
+    name: db
+    description: PostgreSQL database for Saleor platform.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    db:
+      image: env-3304.registry.local/db:main-dfd5a8b
+      build: .
+      dockerfile: Dockerfile.db
+  services:
+    postgres-default:
+      description: Default PostgreSQL port
+      container: db
+      port: 5432
+      host-port: 5432
+      publish: true
+      protocol: tcp
+  connections:
+    database-to-redis:
+      target: saleor-platform/redis
+      service: redis-port
+      optional: true
+      description: Connection from PostgreSQL database to Redis cache
+  variables:
+    postgres-user:
+      env: POSTGRES_USER
+      type: string
+      value: saleor
+      description: Username for the PostgreSQL database
+    postgres-password:
+      env: POSTGRES_PASSWORD
+      type: string
+      value: saleor
+      description: Password for the PostgreSQL database
+    postgres-db:
+      env: POSTGRES_DB
+      type: string
+      value: saleor
+      description: Database name for PostgreSQL
+
+redis:
+  defines: runnable
+  metadata:
+    name: redis
+    description: Redis cache for Saleor platform.
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    redis:
+      image: env-3304.registry.local/redis:main-dfd5a8b
+      build: .
+      dockerfile: Dockerfile.redis
+  services:
+    redis-port:
+      description: Default Redis port for cache and message broker.
+      container: redis
+      port: 6379
+      host-port: 6379
+      publish: true
+      protocol: tcp
+  connections:
+    redis-to-api:
+      target: saleor-platform/api
+      service: '!!!SETME!!!'
+      optional: true
+      description: >-
+        Redis service is a dependency for the API service, providing caching
+        capabilities.
+    redis-to-worker:
+      target: saleor-platform/worker
+      service: '!!!SETME!!!'
+      optional: true
+      description: >-
+        Redis service is a dependency for the Worker service, used as a broker
+        for Celery.
+  variables:
+    celery-broker-url:
+      env: CELERY_BROKER_URL
+      type: string
+      value: redis://redis:6379/1
+      description: The URL of the Redis server used as a broker for Celery.
+
+stack:
+  defines: group
+  members:
+    - saleor-platform/db
+    - saleor-platform/redis
