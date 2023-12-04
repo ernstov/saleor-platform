@@ -1,0 +1,165 @@
+namespace: saleor-platform
+
+db:
+  defines: runnable
+  metadata:
+    name: db
+    description: Postgres database for Saleor
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    db:
+      image: env-3304.registry.local/db:main-dfd5a8b
+      build: .
+      dockerfile: Dockerfile.db
+  services:
+    postgres-default:
+      description: PostgreSQL default port for database connections.
+      container: db
+      port: 5432
+      host-port: 5432
+      publish: true
+      protocol: tcp
+  connections:
+    database-to-worker:
+      target: saleor-platform/worker
+      service: '!!!SETME!!!'
+      optional: true
+      description: >-
+        The worker service depends on the database service to store and retrieve
+        data.
+  variables:
+    postgres-db:
+      env: POSTGRES_DB
+      type: string
+      value: saleor
+      description: The database name for the Postgres service.
+    postgres-user:
+      env: POSTGRES_USER
+      type: string
+      value: saleor
+      description: The user for the Postgres service.
+    postgres-password:
+      env: POSTGRES_PASSWORD
+      type: string
+      value: saleor
+      description: The password for the Postgres service.
+    database-url:
+      env: DATABASE_URL
+      type: string
+      value: postgresql://saleor:saleor@db:5432/saleor
+      description: The URL for connecting to the database.
+
+jaeger:
+  defines: runnable
+  metadata:
+    name: jaeger
+    description: Jaeger service for Application Performance Monitoring (APM)
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    jaeger:
+      image: env-3304.registry.local/jaeger:main-dfd5a8b
+      build: .
+      dockerfile: Dockerfile.jaeger
+  services:
+    jaeger-zipkin:
+      description: Zipkin compatible endpoint (9411)
+      container: jaeger
+      port: 9411
+      host-port: 9411
+      publish: true
+      protocol: tcp
+    jaeger-collector:
+      description: Jaeger collector service (14268)
+      container: jaeger
+      port: 14268
+      host-port: 14268
+      publish: true
+      protocol: tcp
+    jaeger-query:
+      description: Jaeger query service (16686)
+      container: jaeger
+      port: 16686
+      host-port: 16686
+      publish: true
+      protocol: tcp
+    jaeger-config-rest:
+      description: Jaeger configuration REST API (5778)
+      container: jaeger
+      port: 5778
+      host-port: 5778
+      publish: true
+      protocol: tcp
+    jaeger-agent-compact:
+      description: Jaeger agent compact thrift protocol (6831)
+      container: jaeger
+      port: 6831
+      host-port: 6831
+      publish: true
+      protocol: tcp
+    jaeger-agent-binary:
+      description: Jaeger agent binary thrift protocol (6832)
+      container: jaeger
+      port: 6832
+      host-port: 6832
+      publish: true
+      protocol: tcp
+    jaeger-agent-zipkin-thrift:
+      description: Jaeger agent Zipkin thrift protocol (5775)
+      container: jaeger
+      port: 5775
+      host-port: 5775
+      publish: true
+      protocol: tcp
+  connections:
+    jaeger-network-connection:
+      target: saleor-platform/saleor-backend-tier
+      service: '!!!SETME!!!'
+      optional: true
+      description: Jaeger service is connected to the saleor-backend-tier network
+  variables: {}
+
+mailpit:
+  defines: runnable
+  metadata:
+    name: mailpit
+    description: Mailpit service for testing emails
+    icon: https://emojiapi.dev/api/v1/robot.svg
+  containers:
+    mailpit:
+      image: env-3304.registry.local/mailpit:main-dfd5a8b
+      build: .
+      dockerfile: Dockerfile.mailpit
+  services:
+    smtp-port:
+      description: SMTP server port for sending emails
+      container: mailpit
+      port: 1025
+      host-port: 1025
+      publish: false
+      protocol: tcp
+    web-ui-port:
+      description: Web UI port for accessing the mailpit interface
+      container: mailpit
+      port: 8025
+      host-port: 8025
+      publish: true
+      protocol: tcp
+  connections:
+    worker-to-mailpit:
+      target: saleor-platform/mailpit
+      service: smtp-port
+      optional: true
+      description: The worker service sends emails via the mailpit service.
+  variables:
+    email-url:
+      env: EMAIL_URL
+      type: string
+      value: smtp://mailpit:1025
+      description: URL for the email service, used by other services to send emails
+
+stack:
+  defines: group
+  members:
+    - saleor-platform/db
+    - saleor-platform/jaeger
+    - saleor-platform/mailpit

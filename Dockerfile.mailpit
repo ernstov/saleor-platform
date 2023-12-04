@@ -1,0 +1,8 @@
+FROM axllent/mailpit
+
+# Expose ports for SMTP server and web UI
+EXPOSE 1025 8025
+
+# The service does not require additional environment variables or volumes according to docker-compose.yml
+
+# Command to run the service is not specified, assuming default CMD from the base image is used
